@@ -178,3 +178,8 @@ normalizar <- function(x){
   if(max(x) == min(x)) return(x)
   return((x-min(x))/(max(x)-min(x)))
 }
+
+#Función para estandarizar
+estandarizar <- function(x){
+  return((x-mean(x))/sd(x))
+}

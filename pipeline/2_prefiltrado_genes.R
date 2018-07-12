@@ -1,24 +1,24 @@
 ######################################################################
-#SCRIPT QUE GENERA UNA RED DE TRANSCRIPCION PARA UNA DADA TEMPERATURA.
-#Autor: Ariel Chernomoretz
-#Creación: 29/05/2017
-#Última modificación: 1/06/2018 (por Andrés Rabinovich)
+#SCRIPT QUE FILTRA DATOS DE EXPRESION
+#Autor: Andrés Rabinovich en base a un script de Ariel Chernomoretz
+#Creación: 01/06/2018
+#Última modificación: XX/XX/XXXX (por XXX)
 ######################################################################
 
 #Librerías que necesita
 require(edgeR)
 
 #Elige directorio de trabajo
-setwd("/home/arabinov/doctorado/programacion/redes_cosplicing/pipeline_archivos/")
+setwd("/home/arabinov/doctorado/programacion/redes_mixtas/")
 
 #Levanta las cuentas 
-(load("cuentas.Rdata"))
+(load("pipeline_archivos/cuentas.Rdata"))
 
 #Cargamos la lista de reguladores generada a partir de varios repositorios de datos.
-(load("reguladores.Rdata"))
+(load("pipeline_archivos/reguladores.Rdata"))
 
 #Elegimos las condiciones para la que vamos a generar la red
-(load("1_seleccion_de_condiciones.Rdata"))
+(load("pipeline_archivos/1_seleccion_de_condiciones.Rdata"))
 
 #Nos quedamos con los reguladores de expresión génica
 reguladores_de_expresion <- union(union(poi[["TF"]],poi[["TCF"]]),reguladores[reguladores[,"tipo_de_regulador"]=="TF","gene_id"])
@@ -109,5 +109,40 @@ pvalues_genes  <- pvalues_genes[!apply(pvalues_genes, 1, function(x){any(is.na(x
 qvalues_genes           <- matrix(p.adjust(pvalues_genes,"fdr"), ncol=ncol(pvalues_genes), byrow=FALSE)        
 rownames(qvalues_genes) <- rownames(pvalues_genes)
 
+
+#data.frame con las condiciones experimentales.
+phenotype<-data.frame(condition    = c(paste0("T", temperatura, ".t", rep(seq(1:12), each=2))), 
+                      temperaturas = rep(c(temperatura), each=24),
+                      tiempos      = rep(1:12, each=2)
+)
+
+
+#Ordena los niveles de las condiciones experimentales
+phenotype$condition    <- factor(phenotype$condition,levels=unique(phenotype$condition)) 
+phenotype$tiempos      <- factor(phenotype$tiempos,levels=unique(phenotype$tiempos)) 
+phenotype$temperaturas <- factor(phenotype$temperaturas,levels=unique(phenotype$temperaturas)) 
+rownames(phenotype) <- paste0("at_", paste(rep(c(temperatura), each=24), 
+                                           paste(rep(1:12, each=2), c("A", "B"), sep="_"), 
+                                           sep="_"))
+
+genes_crudos   <- cuentas_genes[, grep(paste0("at_", temperatura), colnames(cuentas_genes))]
+
+#Fiteamos las cuentas de los genes por condición para temperatura
+design <- model.matrix(~condition+0, data=phenotype)
+
+#Arma el objeto DGEList con las cuentas de los bines y de los genes y las condiciones
+y_genes <- DGEList(counts=genes_crudos, group = phenotype$condition, genes = genes_crudos[,1:8])
+
+#Calcula el factor de normalización para escalar los tamaños de las librerías
+y_genes <- calcNormFactors(y_genes, method=c("TMM","RLE","upperquartile")[1])
+
+#Para fitear una binomial negativa se necesita estimar el parámetro de dispersión de la binomial negativa (1/r, con r 
+#la cantidad de veces que tiene que fallar la binomial negativa).
+y_genes <- estimateDisp(y_genes, design)
+
+#Ajustamos los genes y usamos los coeficientes del ajuste como perfiles
+fit_genes <- glmFit(y_genes, design)
+
 #Guarda las cuentas de los genes y los cambios (log fold change) entre condiciones
-save(lfchange_genes, qvalues_genes, cuentas_genes, reguladores_de_expresion, file="2_genes_prefiltrados.Rdata")
+perfiles_genes <- fit_genes$coefficients
+save(lfchange_genes, qvalues_genes, perfiles_genes, cuentas_genes, reguladores_de_expresion, file="pipeline_archivos/2_genes_prefiltrados.Rdata")

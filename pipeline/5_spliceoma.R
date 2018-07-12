@@ -1,6 +1,6 @@
 ##############################################################################################
-#SCRIPT QUE GENERA UNA RED DE COSPLICING PARA UNA DADA TEMPERATURA USANDO COMO REFERENCIA T22.
-#Autor: Andrés Rabinovich en base al script red_de_cosplicing.R de Ariel Chernomoretz
+#SCRIPT QUE GENERA UNA RED DE COSPLICING
+#Autor: Andrés Rabinovich
 #Creación: 16/03/2018
 #Última modificación: 05/06/2018 (por Andrés Rabinovich)
 ##############################################################################################
@@ -8,16 +8,16 @@
 #Librerías que necesita
 library(igraph)
 library(shiny)
-setwd("/home/arabinov/doctorado/programacion/redes_cosplicing/pipeline_archivos/")
+setwd("/home/arabinov/doctorado/programacion/redes_mixtas/")
 
 #Funciones varias para grafos
-source("../pipeline/funciones_grafos.R")
+source("pipeline/funciones_grafos.R")
 
 #Elegimos las condiciones para la que vamos a generar la red
-(load("1_seleccion_de_condiciones.Rdata"))
+(load("pipeline_archivos/1_seleccion_de_condiciones.Rdata"))
 
 #Levantamos las cuentas de los genes 
-(load("4_bines_prefiltrados.Rdata"))
+(load("pipeline_archivos/4_bines_prefiltrados.Rdata"))
 
 #Usamos correlación entre perfiles de bines con uso diferencial para armar la red
 correlaciones_bines <- cor(t(perfiles_bines))
@@ -171,7 +171,7 @@ server <- function(input, output) {
     readme <- data.frame(dato=c("lfchange_limite", "qvalue_limite", "cantidad_de_tiempos_limite", "correlacion_minima"),
                          valor=c(log2(input$lfchange_limite/100+1), input$qvalue_limite, input$cantidad_de_tiempos_limite, input$correlacion_minima))
     g_bines <- rv$g_bines
-    save(g_bines, readme, file="5_spliceoma.Rdata")
+    save(g_bines, readme, file="pipeline_archivos/5_spliceoma.Rdata")
     stopApp()
   })
 }

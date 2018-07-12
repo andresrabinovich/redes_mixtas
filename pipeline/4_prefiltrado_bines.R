@@ -1,20 +1,20 @@
 ##############################################################################################
-#SCRIPT QUE GENERA UNA RED DE COSPLICING PARA UNA DADA TEMPERATURA USANDO COMO REFERENCIA T22.
-#Autor: Andrés Rabinovich en base al script red_de_cosplicing.R de Ariel Chernomoretz
-#Creación: 16/03/2018
+#SCRIPT QUE FILTRA DATOS DE BINES
+#Autor: Andrés Rabinovich
+#Creación: 01/06/2018
 #Última modificación: XX/XX/XXXX (por XXX)
 ##############################################################################################
 
 #Librerías que necesita
 library(ASpli)
 library(ashr)
-setwd("/home/arabinov/doctorado/programacion/redes_cosplicing/pipeline_archivos/")
+setwd("/home/arabinov/doctorado/programacion/redes_mixtas/")
 
 #Levanta las cuentas 
-(load("cuentas.Rdata"))
+(load("pipeline_archivos/cuentas.Rdata"))
 
 #Elegimos las condiciones para la que vamos a generar la red
-(load("1_seleccion_de_condiciones.Rdata"))
+(load("pipeline_archivos/1_seleccion_de_condiciones.Rdata"))
 
 #Solo queremos las cuentas de la temperatura indicada y las de referencia
 iTemp<-c(grep(paste0("at_",temperatura_referencia,"_"),colnames(cuentas_genes)), 
@@ -122,9 +122,9 @@ for(i in 1:(0.5*ncol(fit$coef))){
       paste(paste0(contrastes[1:12], collapse = ""), paste0(contrastes[13:24], collapse = ""), sep="|")
       ,"\n")
   
-  ds       <- diffSpliceDGE(fit, contrast = contrastes, geneid="locus",exonid="exonid")
+  ds          <- diffSpliceDGE(fit, contrast = contrastes, geneid="locus",exonid="exonid")
   
-  binname                    <- rownames(ds$genes)
+  binname     <- rownames(ds$genes)
   # Ojo...notar que coeff -> logFC y exon.p.value -> P.Value
   lfchange_bines[binname, i] <-ds$coefficients
   pvalues_bines[binname, i]  <-ds$exon.p.value
@@ -191,7 +191,7 @@ y_bines <- estimateDisp(y_bines, design)
 
 #Para fittear los bines y sacar la señal del gen necesitamos poner como offset los coeficientes de los genes.
 #Además necesitamos ajustar por el tamaño de librería
-offset <- apply(fit_genes$coefficients[y_bines$genes$symbol, ],1, mean)
+offset <- apply(fit_genes$coefficients[y_bines$genes$symbol, ], 1, mean)
 
 y_bines$offset <- matrix(rep(offset, times=ncol(y_bines$counts)), ncol=ncol(y_bines$counts), byrow=FALSE) + 
   matrix(log(rep(y_bines$samples$lib.size*y_bines$samples$norm.factors, each=nrow(y_bines$counts))), ncol=ncol(y_bines$counts), byrow=F) 
@@ -230,4 +230,4 @@ lfchange_bines           <- lfchange_bines[bines_con_uso_diferencial, ]
 qvalues_bines            <- qvalues_bines[bines_con_uso_diferencial, ]
 
 #Guarda las cuentas de los bines y los cambios (log fold change) entre condiciones
-save(lfchange_bines, qvalues_bines, perfiles_bines, file="4_bines_prefiltrados.Rdata")
+save(lfchange_bines, qvalues_bines, perfiles_bines, file="pipeline_archivos/4_bines_prefiltrados.Rdata")

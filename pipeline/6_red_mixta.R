@@ -1,6 +1,6 @@
 ##############################################################################################
-#SCRIPT QUE GENERA UNA RED DE COSPLICING PARA UNA DADA TEMPERATURA USANDO COMO REFERENCIA T22.
-#Autor: Andrés Rabinovich en base al script red_de_cosplicing.R de Ariel Chernomoretz
+#SCRIPT QUE GENERA UNA RED MIXTA
+#Autor: Andrés Rabinovich
 #Creación: 16/03/2018
 #Última modificación: 05/06/2018 (por Andrés Rabinovich)
 ##############################################################################################
@@ -8,39 +8,43 @@
 #Librerías que necesita
 library(igraph)
 library(shiny)
-setwd("/home/arabinov/doctorado/programacion/redes_cosplicing/pipeline_archivos/")
+library(reshape2) #Para meltear la matrix de cor
+setwd("/home/arabinov/doctorado/programacion/redes_mixtas/")
 
 #Funciones varias para grafos
-source("../pipeline/funciones_grafos.R")
+source("pipeline/funciones_grafos.R")
 
 #Elegimos las condiciones para la que vamos a generar la red
-(load("1_seleccion_de_condiciones.Rdata"))
+(load("pipeline_archivos/1_seleccion_de_condiciones.Rdata"))
 
 #Cargamos archivos de reguladores
-(load("reguladores.Rdata"))
+(load("pipeline_archivos/reguladores.Rdata"))
 
 #Levantamos las redes de genes y bines y los perfiles de ambos para armar la red mixta
-(load("2_genes_prefiltrados.Rdata"))
-(load("3_transcriptoma.Rdata"))
-(load("4_bines_prefiltrados.Rdata"))
-(load("5_spliceoma.Rdata"))
+(load("pipeline_archivos/2_genes_prefiltrados.Rdata"))
+(load("pipeline_archivos/3_transcriptoma.Rdata"))
+(load("pipeline_archivos/4_bines_prefiltrados.Rdata"))
+(load("pipeline_archivos/5_spliceoma.Rdata"))
 
 #Levantamos los simbolos de los genes
-at_simbolos        <- at_to_symbol <- read.table("at_to_symbol_map", sep = "\t", header = F, stringsAsFactors = F)
+at_simbolos        <- at_to_symbol <- read.table("pipeline_archivos/at_to_symbol_map", sep = "\t", header = F, stringsAsFactors = F)
 at_simbolos        <- at_to_symbol$V2
 names(at_simbolos) <- at_to_symbol$V1
 
 #Levantamos los genes relacionados con splicing en el transcriptoma
 proteinas_relacionadas_con_splicing <- unique(c(poi$SP, reguladores$gene_id[reguladores$tipo_de_regulador=="RBP" | reguladores$tipo_de_regulador=="NO CLASIFICADOS"]))
+proteinas_relacionadas_con_splicing <- c(proteinas_relacionadas_con_splicing, "AT4G31120")
 
 #Unimos las dos redes en un solo grafo pero por ahora no están vinculadas entre si
-g <- igraph::union(as.undirected(g_genes), g_bines)
-g <- graph_from_edgelist(ends(g, E(g)), directed = F)
+g           <- graph_from_edgelist(rbind(ends(g_genes, E(g_genes)), ends(g_bines, E(g_bines))), directed = F)
+E(g)$weight <- c(E(g_genes)$weight, E(g_bines)$weight)
+
 
 #Calculamos la correlación entre bines y proteinas relacionadas con splicing
 perfiles_bines <- perfiles_bines[names(V(g_bines)), ]
 perfiles_genes <- perfiles_genes[intersect(names(V(g_genes)), proteinas_relacionadas_con_splicing), ]
 ccor           <- cor(t(perfiles_bines), t(perfiles_genes))
+adyacencia     <- setNames(melt(ccor), c('targets', 'sf', 'pesos'))
 
 #interfaz de shiny
 ui <- fluidPage(
@@ -86,15 +90,15 @@ server <- function(input, output) {
   
    #Plotea el gráfico de cantidad de enlaces gen bin en función de la correlación
   output$cantidad_de_enlaces_gen_bin <- renderPlot({
-    vertices <- c()
+    enlaces <- c()
     correlaciones <- signif(seq(0.65, 1, 0.01), 2)
     for(correlacion_minima in correlaciones){
-      vertices <- c(vertices, sum(ccor > correlacion_minima))
+      enlaces <- c(enlaces, sum(adyacencia$pesos > correlacion_minima))
     }
-    plot(correlaciones, vertices, xlab="Correlación", ylab="Vértices en la red", cex.lab=1.5)
+    plot(correlaciones, enlaces, xlab="Correlación", ylab="Enlaces inter redes", cex.lab=1.5)
     grid(col = "gray", lty = "dotted")
-    cantidad_de_vertices_elegidos <- vertices[correlaciones == input$correlacion_minima]
-    text(x=input$correlacion_minima, y=cantidad_de_vertices_elegidos, labels=paste0("(", input$correlacion_minima, ", ", cantidad_de_vertices_elegidos, ")"), cex=0.9, pos=2)
+    cantidad_de_enlaces_elegidos <- enlaces[correlaciones == input$correlacion_minima]
+    text(x=input$correlacion_minima, y=cantidad_de_enlaces_elegidos, labels=paste0("(", input$correlacion_minima, ", ", cantidad_de_enlaces_elegidos, ")"), cex=0.9, pos=2)
     abline(v=input$correlacion_minima, col="red")
   })
   
@@ -107,7 +111,9 @@ server <- function(input, output) {
     genes_de_interes_marcelo <- trimws(strsplit2(input$genes_de_interes_marcelo, ","))
     salida <- ""
     for(i in genes_de_interes_marcelo){
-      salida <- paste0(salida, i, " (gen): ", sum(ccor[, colnames(ccor) %in% i] > input$correlacion_minima), " - ")
+      if(i %in% proteinas_relacionadas_con_splicing){
+        salida <- paste0(salida, i, " (gen): ", sum(ccor[, colnames(ccor) %in% i] > input$correlacion_minima), " - ")
+      }
       salida <- paste0(salida, i, " (bin): ", sum(ccor[grep(i, rownames(ccor)), ] > input$correlacion_minima), "</br>")
     }
     HTML(salida)
@@ -115,16 +121,11 @@ server <- function(input, output) {
   
   #Agrega los nuevos enlaces a la red
   observeEvent(input$siguiente, {
-    ccor[ccor < input$correlacion_minima] <- 0
-    enlaces <- cbind(rownames(ccor), rep(colnames(ccor), each=nrow(ccor)))
-    void <- apply(enlaces, 1, function(x) {
-      if(ccor[x[1], x[2]] > 0){
-        g <<- add_edges(g, c(which(names(V(g)) == x[1]), which(names(V(g)) == x[2])), attr=list(weight = ccor[x[1], x[2]]))
-      }
-    })
+    enlaces_totales     <- which(adyacencia$pesos > input$correlacion_minima)
+    g                   <<- add_edges(g, c(t(adyacencia[enlaces_totales, c(2,1)])), attr=list(weight = adyacencia$pesos[enlaces_totales]))
     readme <- data.frame(dato="correlacion_minima",
                          valor=input$correlacion_minima)
-    save(g, readme, file="6_red_mixta.Rdata")
+    save(g, readme, file="pipeline_archivos/6_red_mixta.Rdata")
     stopApp()
   })
 }

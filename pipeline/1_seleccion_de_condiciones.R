@@ -1,5 +1,12 @@
+######################################################################
+#SCRIPT PARA ELEGIR LAS CONDICIONES PARA LA GENERACION DE LA RED MIXTA
+#Autor: Andrés Rabinovich
+#Creación: 01/06/2018
+#Última modificación: XX/XX/XXXX (por XXX)
+######################################################################
+
 #Elige directorio de trabajo
-setwd("/home/arabinov/doctorado/programacion/redes_cosplicing/pipeline_archivos/")
+setwd("/home/arabinov/doctorado/programacion/redes_mixtas/pipeline_archivos/")
 
 #Elegimos las condiciones para la que vamos a generar la red
 temperatura            = 12

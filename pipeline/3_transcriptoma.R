@@ -1,33 +1,54 @@
+######################################################################
+#SCRIPT QUE GENERA UNA RED DE TRANSCRIPCION
+#Autor: Andrés Rabinovich en base a un script de Ariel Chernomoretz
+#Creación: 01/06/2018
+#Última modificación: XX/XX/XXXX (por XXX)
+######################################################################
+
 #Librerías que necesita
 library(shiny)
 library(igraph)
 library(limma) #Para usar strsplit2
 library(WGCNA) #Para usar bicor
+library(reshape2) #Para meltear la matrix de bicor
 
 #Directorio de trabajo
-setwd("/home/arabinov/doctorado/programacion/redes_cosplicing/pipeline_archivos/")
+setwd("/home/arabinov/doctorado/programacion/redes_mixtas/")
 
 #Funciones varias para grafos
-source("../pipeline/funciones_grafos.R")
+source("pipeline/funciones_grafos.R")
 
 #Elegimos las condiciones para la que vamos a generar la red
-(load("1_seleccion_de_condiciones.Rdata"))
+(load("pipeline_archivos/1_seleccion_de_condiciones.Rdata"))
 
 #Levantamos las cuentas de los genes 
-(load("2_genes_prefiltrados.Rdata"))
+(load("pipeline_archivos/2_genes_prefiltrados.Rdata"))
 
 #Levantamos los perfiles unicamente de la temperatura (sin la referencia)
-iTemp    <- grep(paste0("at_",temperatura,"_"), colnames(cuentas_genes))
+#iTemp    <- grep(paste0("at_",temperatura,"_"), colnames(cuentas_genes))
 
 #Filtra y genera un perfil del log de cuentas por millon
-perfiles <- apply(cuentas_genes[, iTemp],2,function(x){log(x/sum(x)*1e6+0.01)})
+#perfiles <- apply(cuentas_genes[, iTemp],2,function(x){log(x/sum(x)*1e6+0.01)})
 
 #Promedia replicas
-perfiles <- 0.5*(perfiles[,(1:ncol(perfiles))%%2==1]+perfiles[,(1:ncol(perfiles))%%2==0])
+#perfiles <- 0.5*(perfiles[,(1:ncol(perfiles))%%2==1]+perfiles[,(1:ncol(perfiles))%%2==0])
+#layout(matrix(1:12, ncol=3, nrow=4))
+#ss <- sample(1:nrow(perfiles), 12)
+#for(i in ss){
+#matplot(t(rbind(perfiles[i, ], perfiles_genes[i, ])), type="l")
+#}
+#layout(1)
 
+#layout(matrix(1:12, ncol=3, nrow=4))
+#for(i in 1:12){
+#  plot(perfiles[, i], perfiles_genes[, i])
+#}
+#layout(1)
+
+#perfiles_genes <- perfiles
 #Calcula la bicorrelacion entre los perfiles. Si el MAD es cero, usa la correlación de pearson. 
 #Hay pocos genes en esa situación
-bcor <- bicor(t(perfiles))
+bcor <- bicor(t(perfiles_genes))
 
 #interfaz de shiny
 ui <- fluidPage(
@@ -53,7 +74,7 @@ ui <- fluidPage(
 
       sliderInput("correlacion_minima", 
                   label = "Correlación mínima:",
-                  min = 0.7, max = 1, value=0.85, step=0.01),
+                  min = 0.7, max = 1, value=0.86, step=0.01),
       
       textAreaInput("genes_de_interes_marcelo", 
                 value=paste0(c("AT3G09600",
@@ -129,24 +150,20 @@ server <- function(input, output) {
   
   #Plotea el gráfico de cantidad de elementos en la componente gigante en función de la correlación
   output$componente_gigante <- renderPlot({ 
+
     genes_de_interes_marcelo  <- trimws(strsplit2(input$genes_de_interes_marcelo, ","))
     enlaces                   <- c()
     vertices                  <- c()
     cantidad_genes_de_interes <- c()
     correlaciones <- signif(seq(.7, 1, 0.01), 2)
+    adyacencia    <- setNames(melt(bcor[intersect(rv$genes_con_expresion_diferencial, reguladores_de_expresion), rv$genes_con_expresion_diferencial], variable.factor=F), c('tfs', 'targets', 'pesos'))
+    adyacencia    <- adyacencia[as.character(adyacencia$tfs) != as.character(adyacencia$targets), ]
     for(correlacion_minima in correlaciones){
-      adyacencia                                                               <- bcor[rv$genes_con_expresion_diferencial, rv$genes_con_expresion_diferencial]
-      adyacencia[adyacencia < correlacion_minima]                              <- 0
-      diag(adyacencia)                                                         <- 0
-      
-      adyacencia_columna <- adyacencia_fila <- adyacencia
-      adyacencia_fila[!rownames(adyacencia_fila) %in% reguladores_de_expresion, ] <- 0
-      adyacencia_columna[, !colnames(adyacencia_columna) %in% reguladores_de_expresion] <- 0
-      adyacencia <- .5*(adyacencia_columna+adyacencia_fila)
-      adyacencia[lower.tri(adyacencia)] <- 0
-
-      #Generamos el grafo a partir de la matriz de adjacencia
-      g_genes                   <- componente_gigante(graph_from_adjacency_matrix(adyacencia, "directed", weighted=TRUE, diag=FALSE))
+      #Generamos el grafo a partir de la lista de edges que tienen correlación mayor que la mínima
+      enlaces_totales           <- adyacencia$pesos > correlacion_minima
+      g_genes                   <- graph_from_edgelist(as.matrix(adyacencia[enlaces_totales, c(1,2)], ncol=2))
+      E(g_genes)$weight         <- adyacencia[enlaces_totales, 3]
+      g_genes                   <- componente_gigante(g_genes)  
       cantidad_genes_de_interes <- c(cantidad_genes_de_interes, sum(names(V(g_genes)) %in% genes_de_interes_marcelo))
       enlaces                   <- c(enlaces, ecount(g_genes))
       vertices                  <- c(vertices, vcount(g_genes))
@@ -154,14 +171,14 @@ server <- function(input, output) {
         rv$g_genes <- g_genes
       }
     }
-    layout(matrix(1:3, nrow=3, ncol=1))
-
+    layout(matrix(1:4, nrow=4, ncol=1))
+    
     plot(correlaciones, vertices, xlab="Correlación", ylab="Vértices en la red", cex.lab=1.5)
     grid(col = "gray", lty = "dotted")
     abline(v=input$correlacion_minima, col="red")
     y <- vertices[correlaciones == input$correlacion_minima]    
     text(x=1, y=round(max(vertices)*0.85), labels=paste0("(", input$correlacion_minima, ", ", y, ")"), cex=1.5, pos=2)
-
+    
     plot(correlaciones, enlaces, xlab="Correlación", ylab="Enlaces en la red", cex.lab=1.5)
     grid(col = "gray", lty = "dotted")
     abline(v=input$correlacion_minima, col="red")
@@ -174,15 +191,16 @@ server <- function(input, output) {
     y <- cantidad_genes_de_interes[correlaciones == input$correlacion_minima]    
     text(x=1, y=round(max(cantidad_genes_de_interes)*0.85), labels=paste0("(", input$correlacion_minima, ", ", y, ")"), cex=1.5, pos=2)
     
+    hist(E(rv$g_genes)$weight, main=NA, xlab=paste("Correlación", input$correlacion_minima), ylab="Pesos", cex.lab=1.5, freq = F, breaks=20)    
   })  
 
     #Guarda los perfiles
   observeEvent(input$siguiente, {
-    perfiles_genes <- perfiles[rv$genes_con_expresion_diferencial, ]
+    perfiles_genes <- perfiles_genes[rv$genes_con_expresion_diferencial, ]
     readme <- data.frame(dato=c("lfchange_limite", "qvalue_limite", "cantidad_de_tiempos_limite", "correlacion_minima"),
                          valor=c(log2(input$lfchange_limite/100+1), input$qvalue_limite, input$cantidad_de_tiempos_limite, input$correlacion_minima))
     g_genes <- rv$g_genes
-    save(perfiles_genes, g_genes, readme, file="3_transcriptoma.Rdata")
+    save(perfiles_genes, g_genes, readme, file="pipeline_archivos/3_transcriptoma.Rdata")
     stopApp()
   })  
 }

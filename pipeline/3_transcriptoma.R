@@ -13,10 +13,13 @@ library(WGCNA) #Para usar bicor
 library(reshape2) #Para meltear la matrix de bicor
 
 #Directorio de trabajo
-setwd("/home/arabinov/doctorado/programacion/redes_mixtas/")
+setwd("~/doctorado/programacion/redes_mixtas/")
 
 #Funciones varias para grafos
 source("pipeline/funciones_grafos.R")
+
+#Cargamos la lista de reguladores generada a partir de varios repositorios de datos.
+(load("pipeline_archivos/reguladores.Rdata"))
 
 #Elegimos las condiciones para la que vamos a generar la red
 (load("pipeline_archivos/1_seleccion_de_condiciones.Rdata"))
@@ -24,31 +27,32 @@ source("pipeline/funciones_grafos.R")
 #Levantamos las cuentas de los genes 
 (load("pipeline_archivos/2_genes_prefiltrados.Rdata"))
 
-#Levantamos los perfiles unicamente de la temperatura (sin la referencia)
-#iTemp    <- grep(paste0("at_",temperatura,"_"), colnames(cuentas_genes))
+(load("pipeline_archivos/5_spliceoma.Rdata"))
 
-#Filtra y genera un perfil del log de cuentas por millon
-#perfiles <- apply(cuentas_genes[, iTemp],2,function(x){log(x/sum(x)*1e6+0.01)})
 
-#Promedia replicas
-#perfiles <- 0.5*(perfiles[,(1:ncol(perfiles))%%2==1]+perfiles[,(1:ncol(perfiles))%%2==0])
-#layout(matrix(1:12, ncol=3, nrow=4))
-#ss <- sample(1:nrow(perfiles), 12)
-#for(i in ss){
-#matplot(t(rbind(perfiles[i, ], perfiles_genes[i, ])), type="l")
-#}
-#layout(1)
+#Nos quedamos con los reguladores de expresión génica y cofactores de transcripcion
+reguladores_de_expresion <- unique(c(poi[["TF"]], 
+                                     poi[["TCF"]],
+                                     reguladores[reguladores[,"tipo_de_regulador"]=="TF","gene_id"])
+)
 
-#layout(matrix(1:12, ncol=3, nrow=4))
-#for(i in 1:12){
-#  plot(perfiles[, i], perfiles_genes[, i])
-#}
-#layout(1)
+genes_de_interes <- unique(c(unlist(poi), reguladores$gene_id))
 
-#perfiles_genes <- perfiles
+#Agrego phytochromos a, b, c, d y e
+genes_de_interes <- c(genes_de_interes, "AT1G09570", "AT2G18790", "AT5G35840", "AT4G16250", "AT4G18130")
+
+#Genes con bines en cosplicing
+genes_con_bines_en_cosplicing <- intersect(strsplit2(names(V(g_bines)), ":")[, 1], genes_de_interes)
+
+#AGREGADO POR AR: Reduce la red únicamente a los genes de interes (reguladores))
+perfiles_genes   <- perfiles_genes[rownames(perfiles_genes) %in% genes_de_interes, ]
+lfchange_genes   <- lfchange_genes[rownames(perfiles_genes), ]
+qvalues_genes    <- qvalues_genes[rownames(perfiles_genes), ]
+cuentas_genes    <- cuentas_genes[rownames(perfiles_genes), ]
+
 #Calcula la bicorrelacion entre los perfiles. Si el MAD es cero, usa la correlación de pearson. 
 #Hay pocos genes en esa situación
-bcor <- bicor(t(perfiles_genes))
+bcor <- abs(cor(t(perfiles_genes)))
 
 #interfaz de shiny
 ui <- fluidPage(
@@ -62,11 +66,11 @@ ui <- fluidPage(
       selectInput("cantidad_de_tiempos_limite", 
                   label = "Cantidad de puntos temporales con expresión diferencial",
                   choices = 1:12,
-                  selected = 1),
+                  selected = 2),
       
       sliderInput("qvalue_limite", 
                   label = "Máximo qvalue:",
-                  min = 0, max = 1, value = 0.05, step=0.01),
+                  min = 0, max = 1, value = 0.1, step=0.01),
       
       sliderInput("lfchange_limite", 
                   label = "Mínimo cambio a detectar (%):",
@@ -85,7 +89,8 @@ ui <- fluidPage(
                                "AT5G02840", 
                                "AT2G46830", 
                                "AT1G01060", 
-                               "AT2G21660"), collapse=", "),
+                               "AT2G21660", 
+                               "AT2G18740"), collapse=", "),
                 label = "Genes de interes",
                 width = '100%',
                 height = '150px'),
@@ -121,9 +126,20 @@ server <- function(input, output) {
       sum(x<as.numeric(input$qvalue_limite)) >= as.numeric(input$cantidad_de_tiempos_limite)
     })]
     
-    #Me quedo con los genes que pasen ambos filtros
-    rv$genes_con_expresion_diferencial <- sort(intersect(genes_con_alto_lfchange, genes_con_qvalue_bajo))
+    genes_con_alto_lfchange <- genes_con_alto_lfchange[apply(lfchange_tiempo[genes_con_alto_lfchange, ], 1, function(x){
+      sum(abs(x) > log2(as.numeric(input$lfchange_limite)/100+1)) >= as.numeric(input$cantidad_de_tiempos_limite)
+    })]
     
+    genes_con_qvalue_bajo <- genes_con_qvalue_bajo[apply(qvalues_tiempo[genes_con_qvalue_bajo, ], 1, function(x){
+      sum(x<as.numeric(input$qvalue_limite)) >= as.numeric(input$cantidad_de_tiempos_limite)
+    })]
+    
+    #Me quedo con los genes que pasen ambos filtros y además los que figuren en la red de cosplicing
+    rv$genes_con_expresion_diferencial <- sort(union(intersect(genes_con_alto_lfchange, genes_con_qvalue_bajo), 
+                                                     genes_con_bines_en_cosplicing))
+
+    #print(table(rv$genes_con_expresion_diferencial %in% porcupine$`DE 16 a 27`))
+    #rv$genes_con_expresion_diferencial <- sort(intersect(genes_con_alto_lfchange, genes_con_qvalue_bajo))  
   })
 
   #Filtra los genes
@@ -163,10 +179,11 @@ server <- function(input, output) {
       enlaces_totales           <- adyacencia$pesos > correlacion_minima
       g_genes                   <- graph_from_edgelist(as.matrix(adyacencia[enlaces_totales, c(1,2)], ncol=2))
       E(g_genes)$weight         <- adyacencia[enlaces_totales, 3]
-      g_genes                   <- componente_gigante(g_genes)  
-      cantidad_genes_de_interes <- c(cantidad_genes_de_interes, sum(names(V(g_genes)) %in% genes_de_interes_marcelo))
-      enlaces                   <- c(enlaces, ecount(g_genes))
-      vertices                  <- c(vertices, vcount(g_genes))
+      g_genes                   <- simplify(g_genes)
+      gg_genes                  <- componente_gigante(g_genes)  
+      cantidad_genes_de_interes <- c(cantidad_genes_de_interes, sum(names(V(gg_genes)) %in% genes_de_interes_marcelo))
+      enlaces                   <- c(enlaces, ecount(gg_genes))
+      vertices                  <- c(vertices, vcount(gg_genes))
       if(input$correlacion_minima == correlacion_minima){
         rv$g_genes <- g_genes
       }
@@ -196,14 +213,14 @@ server <- function(input, output) {
 
     #Guarda los perfiles
   observeEvent(input$siguiente, {
-    perfiles_genes <- perfiles_genes[rv$genes_con_expresion_diferencial, ]
+    #perfiles_genes <- perfiles_genes[rv$genes_con_expresion_diferencial, ]
     readme <- data.frame(dato=c("lfchange_limite", "qvalue_limite", "cantidad_de_tiempos_limite", "correlacion_minima"),
                          valor=c(log2(input$lfchange_limite/100+1), input$qvalue_limite, input$cantidad_de_tiempos_limite, input$correlacion_minima))
     g_genes <- rv$g_genes
-    save(perfiles_genes, g_genes, readme, file="pipeline_archivos/3_transcriptoma.Rdata")
+    #save(perfiles_genes, g_genes, readme, reguladores_de_expresion, file="pipeline_archivos/3_transcriptoma.Rdata")
+    save(g_genes, readme, reguladores_de_expresion, file="pipeline_archivos/3_transcriptoma.Rdata")
     stopApp()
   })  
 }
 shinyApp(ui = ui, server = server)
 
-#(load("../transcriptoma.RData"))

@@ -8,7 +8,7 @@
 #Librerías que necesita
 library(ASpli)
 library(ashr)
-setwd("/home/arabinov/doctorado/programacion/redes_mixtas/")
+setwd("~/doctorado/programacion/redes_mixtas/")
 
 #Levanta las cuentas 
 (load("pipeline_archivos/cuentas.Rdata"))
@@ -116,7 +116,7 @@ pvalues_bines            <- lfchange_bines
 for(i in 1:(0.5*ncol(fit$coef))){
   #Generamos los contrastes
   contrastes <- rep(0, 24)
-  contrastes[i]    <- -1
+  contrastes[i]      <- -1
   contrastes[i + 12] <- 1
   cat("====================================\nEvaluando contrastes",
       paste(paste0(contrastes[1:12], collapse = ""), paste0(contrastes[13:24], collapse = ""), sep="|")
@@ -206,6 +206,29 @@ fit_bines              <- glmFit(y_bines, design)
 rownames(fit_bines$se) <- rownames(fit_bines$coefficients)
 colnames(fit_bines$se) <- colnames(fit_bines$coefficients)
 
+
+#Pedimos cambios temporales en los perfiles
+pvalues_tiempo           <- matrix(0, ncol=11, nrow=nrow(fit_bines$coefficients))
+rownames(pvalues_tiempo) <- rownames(fit_bines$coefficients)
+lfchange_tiempo          <- pvalues_tiempo
+for(i in 2:12){
+  ds          <- diffSpliceDGE(fit, coef = i, geneid = "locus", exonid = "exonid")
+  
+  binname     <- rownames(ds$genes)
+  
+  # Ojo...notar que coeff -> logFC y exon.p.value -> P.Value
+  lfchange_tiempo[binname, i-1] <-ds$coefficients
+  pvalues_tiempo[binname, i-1]  <-ds$exon.p.value
+  
+}
+
+lfchange_tiempo <- lfchange_tiempo[!apply(lfchange_tiempo, 1, function(x){any(is.na(x))}), ]
+pvalues_tiempo  <- pvalues_tiempo[!apply(pvalues_tiempo, 1, function(x){any(is.na(x))}), ]
+
+#ajusto TODOS los pv 
+qvalues_tiempo           <- matrix(p.adjust(pvalues_tiempo,"fdr"), ncol=ncol(pvalues_tiempo), byrow=FALSE)        
+rownames(qvalues_tiempo) <- rownames(pvalues_tiempo)
+
 #Shrinkeamos los coeficientes usando ashr. Esto ajusta los bines con pocas cuentas para que no se disparen por
 #movimientos en el gen. Como no podemos ajustar los 90000 que tiene, reducimos el número suponiendo que no
 #tiene sentido pedir un qvalue mayor a 0.9 en al menos un tiempo
@@ -230,4 +253,5 @@ lfchange_bines           <- lfchange_bines[bines_con_uso_diferencial, ]
 qvalues_bines            <- qvalues_bines[bines_con_uso_diferencial, ]
 
 #Guarda las cuentas de los bines y los cambios (log fold change) entre condiciones
-save(lfchange_bines, qvalues_bines, perfiles_bines, file="pipeline_archivos/4_bines_prefiltrados.Rdata")
+save(lfchange_bines, qvalues_bines, lfchange_tiempo, qvalues_tiempo, perfiles_bines, file="pipeline_archivos/4_bines_prefiltrados.Rdata")
+

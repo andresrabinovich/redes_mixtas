@@ -9,7 +9,7 @@
 library(igraph)
 library(shiny)
 library(reshape2) #Para meltear la matrix de cor
-setwd("/home/arabinov/doctorado/programacion/redes_mixtas/")
+setwd("~/doctorado/programacion/redes_mixtas/")
 
 #Funciones varias para grafos
 source("pipeline/funciones_grafos.R")
@@ -33,18 +33,21 @@ names(at_simbolos) <- at_to_symbol$V1
 
 #Levantamos los genes relacionados con splicing en el transcriptoma
 proteinas_relacionadas_con_splicing <- unique(c(poi$SP, reguladores$gene_id[reguladores$tipo_de_regulador=="RBP" | reguladores$tipo_de_regulador=="NO CLASIFICADOS"]))
-proteinas_relacionadas_con_splicing <- c(proteinas_relacionadas_con_splicing, "AT4G31120")
+#proteinas_relacionadas_con_splicing <- c(proteinas_relacionadas_con_splicing, "AT4G31120")
 
 #Unimos las dos redes en un solo grafo pero por ahora no están vinculadas entre si
-g           <- graph_from_edgelist(rbind(ends(g_genes, E(g_genes)), ends(g_bines, E(g_bines))), directed = F)
-E(g)$weight <- c(E(g_genes)$weight, E(g_bines)$weight)
-
+g <- as.undirected(g_genes) + g_bines
+E(g)$weight  <- c(E(g)$weight_2[!is.na(E(g)$weight_2)], E(g)$weight_1[!is.na(E(g)$weight_1)])
+#g           <- graph_from_edgelist(rbind(ends(g_genes, E(g_genes)), ends(g_bines, E(g_bines))), directed = F)
+#E(g)$weight <- c(E(g_genes)$weight, E(g_bines)$weight)
+#g           <- simplify(g)
 
 #Calculamos la correlación entre bines y proteinas relacionadas con splicing
-perfiles_bines <- perfiles_bines[names(V(g_bines)), ]
-perfiles_genes <- perfiles_genes[intersect(names(V(g_genes)), proteinas_relacionadas_con_splicing), ]
-ccor           <- cor(t(perfiles_bines), t(perfiles_genes))
-adyacencia     <- setNames(melt(ccor), c('targets', 'sf', 'pesos'))
+perfiles_bines  <- perfiles_bines[names(V(g_bines)), ]
+perfiles_genes  <- perfiles_genes[intersect(names(V(g_genes)), proteinas_relacionadas_con_splicing), ]
+#ccor           <- abs(cor(t(perfiles_bines), t(perfiles_genes)))
+ccor            <- abs(cor(t(perfiles_bines), t(perfiles_genes)))
+adyacencia      <- setNames(melt(ccor), c('targets', 'sf', 'pesos'))
 
 #interfaz de shiny
 ui <- fluidPage(
@@ -66,7 +69,8 @@ ui <- fluidPage(
                                    "AT5G02840", 
                                    "AT2G46830", 
                                    "AT1G01060", 
-                                   "AT2G21660"), collapse=", "),
+                                   "AT2G21660",
+                                   "AT2G18740"), collapse=", "),
                     label = "Genes de interes",
                     width = '100%',
                     height = '150px'),

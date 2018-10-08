@@ -85,7 +85,7 @@ mystar <- function(coords, v=NULL, params) {
 # clips as a circle
 add_shape("star", clip=shapes("circle")$clip, plot=mystar)
 
-setGraphPlotOptions<-function(gg,size=c(reg=7,target=4,bin=4),ecolor=rgb(.7,.7,.7,.9),alfa=0.5, nombres=FALSE, lcolor="black", lsize=0.8, ego=NULL, sacar_desconectados = FALSE, graficar_grado = FALSE, clusters = NULL){
+setGraphPlotOptions<-function(gg,size=c(reg=3,target=3,bin=4), ecolor=rgb(.7,.7,.7,.9), alfa=0.5, nombres=FALSE, lcolor="black", lsize=0.8, ego=NULL, sacar_desconectados = FALSE, graficar_grado = FALSE, clusters = NULL){
   
   if(is.null(V(gg)$label)) V(gg)$label <- names(V(gg))
   if(nombres == FALSE) {
@@ -104,7 +104,7 @@ setGraphPlotOptions<-function(gg,size=c(reg=7,target=4,bin=4),ecolor=rgb(.7,.7,.
   V(gg)$frame.color <- "white"
   
   formas <- c(reg="square", target="circle", bin_reg="triangle", bin="star")
-  colores <- c(reg=rgb(.6,0,0,alfa), target=rgb(.6,.6,.6,alfa), bin=rgb(0,.5, 0,alfa))
+  colores <- c(reg=rgb(0,.6,0,alfa), target=rgb(.6,0,0,alfa), bin=rgb(0,.5, 0,alfa))
   #names(size) <- names(colores) <- names(formas) <- c("reg", "target", "bin")
   V(gg)$shape<-formas[V(gg)$type]
   V(gg)$color<-colores[V(gg)$type]
@@ -136,10 +136,11 @@ setGraphPlotOptions<-function(gg,size=c(reg=7,target=4,bin=4),ecolor=rgb(.7,.7,.
   }
   if(!is.null(ego)) {
     #V(gg)[1]$shape <- "csquare"
-    V(gg)[ego]$color <- rgb(0,1,0,alfa)  
+    V(gg)[ego]$color <- rgb(0,1,0,alfa)
   }
   return(gg) 
 }
+
 
 red_ego<-function(g, nodos = TRUE, unica=TRUE){
   vertices <- ego(g, nodes = nodos)

@@ -51,7 +51,7 @@ for(m in names(l_enlaces_intrared)){
   perfiles   <- rbind(perfiles_genes[m, ], perfiles_bines[l_enlaces_intrared[[m]], ])
   perfiles_e <- t(apply(perfiles, 1, estandarizar))
   matplot(t(perfiles_e), type="l", xlab="Tiempo", ylab="Expresión", main=m)
-  matplot(apply(perfiles_e, 2, mean), type = "l", lwd = 3, add = TRUE)
+  #matplot(apply(perfiles_e, 2, mean), type = "l", lwd = 3, add = TRUE)
 }
 layout(1)
 
@@ -61,7 +61,7 @@ layout(matrix(1:16, ncol=4, nrow=4))
 for(m in names(g_interes)){
   perfiles_e <- t(apply(perfiles[names(V(g_interes[[m]])), ], 1, estandarizar))
   matplot(t(perfiles_e), type="l", xlab="Tiempo", ylab="Expresión", main=m)
-  matplot(apply(perfiles_e, 2, mean), type = "l", lwd = 3, add = TRUE)
+  #matplot(apply(perfiles_e, 2, mean), type = "l", lwd = 3, add = TRUE)
 }
 layout(1)
 

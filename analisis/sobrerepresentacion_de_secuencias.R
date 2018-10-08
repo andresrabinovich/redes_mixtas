@@ -68,8 +68,8 @@ l_secuencias <- setNames(lapply(unique(enlaces_interred[, 2]), function(n){
 }), unique(enlaces_interred[, 2]))
 
 #Subsecuencias entre 6 y 12 caracteres de los módulos
-l_subsecuencias2 <- lapply(l_secuencias, function(s){
-  secuencias <- subsecuencias(min_len = 6, max_len = 12, secuencia  = s)
+l_subsecuencias <- lapply(l_secuencias, function(s){
+  secuencias <- subsecuencias(min_len = 5, max_len = 5, secuencia  = s)
   return(secuencias)
 })
 
@@ -173,5 +173,8 @@ l_tomtom <- lapply(l_qval, function(secuencias){
 #Limpiamos los archivos de tomtom
 limpiar <- file.remove("~/meme/salidas/tomtom.tsv", "~/meme/salidas/tomtom.xml", "~/meme/salidas/tomtom.html", "~/meme/secuencias/meme.txt")
 
-
+l_tomtom_filtrado <- Filter(length, lapply(l_tomtom, function(x){
+  if(sum(x$qvalue < 0.05) > 0)  return(x[x$qvalue < 0.05, ])
+  return(NULL)
+}))
 

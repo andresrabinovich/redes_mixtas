@@ -9,7 +9,7 @@
 library(limma)
 library(igraph)
 library(shiny)
-setwd("/home/arabinov/doctorado/programacion/redes_mixtas/")
+setwd("~/doctorado/programacion/redes_mixtas/")
 
 #Funciones varias para grafos
 source("pipeline/funciones_grafos.R")
@@ -33,6 +33,7 @@ enlaces               <- ends(g, E(g))
 enlaces_interred      <- setdiff(grep(":", enlaces[, 2]), grep(":", enlaces[, 1]))
 genes_ego             <- unique(enlaces[enlaces_interred, 1])
 names(genes_ego)      <- unique(paste0(enlaces[enlaces_interred, 1], " (", at_simbolos[enlaces[enlaces_interred, 1]], ")"))
+genes_ego             <- sort(genes_ego)
 
 #interfaz de shiny
 ui <- fluidPage(

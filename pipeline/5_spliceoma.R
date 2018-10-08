@@ -8,7 +8,7 @@
 #Librerías que necesita
 library(igraph)
 library(shiny)
-setwd("/home/arabinov/doctorado/programacion/redes_mixtas/")
+setwd("~/doctorado/programacion/redes_mixtas/")
 
 #Funciones varias para grafos
 source("pipeline/funciones_grafos.R")
@@ -20,7 +20,7 @@ source("pipeline/funciones_grafos.R")
 (load("pipeline_archivos/4_bines_prefiltrados.Rdata"))
 
 #Usamos correlación entre perfiles de bines con uso diferencial para armar la red
-correlaciones_bines <- cor(t(perfiles_bines))
+correlaciones_bines <- abs(cor(t(perfiles_bines)))
 
 #interfaz de shiny
 ui <- fluidPage(
@@ -38,7 +38,7 @@ ui <- fluidPage(
       
       sliderInput("qvalue_limite", 
                   label = "Máximo qvalue:",
-                  min = 0, max = 0.9, value = 0.24, step=0.01),
+                  min = 0, max = 0.9, value = 0.1, step=0.01),
       
       sliderInput("lfchange_limite", 
                   label = "Mínimo cambio a detectar (%):",
@@ -46,7 +46,7 @@ ui <- fluidPage(
       
       sliderInput("correlacion_minima", 
                   label = "Correlación mínima:",
-                  min = 0.5, max = 1, value=0.73, step=0.01),
+                  min = 0.5, max = 1, value=0.77, step=0.01),
       
       textAreaInput("genes_de_interes_marcelo", 
                     value=paste0(c("AT3G09600",
@@ -57,7 +57,8 @@ ui <- fluidPage(
                                    "AT5G02840", 
                                    "AT2G46830", 
                                    "AT1G01060", 
-                                   "AT2G21660"), collapse=", "),
+                                   "AT2G21660",
+                                   "AT2G18740"), collapse=", "),
                     label = "Genes de interes",
                     width = '100%',
                     height = '150px'),
@@ -92,6 +93,14 @@ server <- function(input, output) {
       sum(x<as.numeric(input$qvalue_limite)) >= as.numeric(input$cantidad_de_tiempos_limite)
     })]
     
+    bines_con_alto_lfchange <- bines_con_alto_lfchange[apply(lfchange_tiempo[bines_con_alto_lfchange, ], 1, function(x){
+     sum(abs(x) > log2(as.numeric(input$lfchange_limite)/100+1)) >= as.numeric(input$cantidad_de_tiempos_limite)
+    })]
+     
+    bines_con_qvalue_bajo <- bines_con_qvalue_bajo[apply(qvalues_tiempo[bines_con_qvalue_bajo, ], 1, function(x){
+     sum(x<as.numeric(input$qvalue_limite)) >= as.numeric(input$cantidad_de_tiempos_limite)
+    })]
+
     #Me quedo con los bines que pasen ambos filtros
     rv$bines_con_uso_diferencial <- sort(intersect(bines_con_alto_lfchange, bines_con_qvalue_bajo))
   })
@@ -112,7 +121,7 @@ server <- function(input, output) {
     genes_de_bines_con_uso_diferencial             <- strsplit2(rv$bines_con_uso_diferencial, ":")[, 1]
     genes_de_interes_marcelo_que_pasaron_el_filtro <- intersect(genes_de_bines_con_uso_diferencial, genes_de_interes_marcelo)
     HTML(paste0("Genes de interés que pasaron el filtro (", length(genes_de_interes_marcelo_que_pasaron_el_filtro), "):</br>", paste0(genes_de_interes_marcelo_que_pasaron_el_filtro, collapse="</br>")))
-  })   
+  })
 
   #Plotea el gráfico de cantidad de elementos en la componente gigante en función de la correlación
   output$componente_gigante <- renderPlot({
@@ -128,12 +137,14 @@ server <- function(input, output) {
       diag(adyacencia)                                                         <- 0
 
       #Generamos el grafo a partir de la matriz de adjacencia
-      g_bines                            <- componente_gigante(graph_from_adjacency_matrix(adyacencia, "undirected", weighted=TRUE, diag=FALSE))
-      genes_de_bines                     <- strsplit2(names(V(g_bines)), ":")
+      g_bines                            <- graph_from_adjacency_matrix(adyacencia, "undirected", weighted=TRUE, diag=FALSE)
+      g_bines                            <- simplify(g_bines)
+      gg_bines                           <- componente_gigante(g_bines)
+      genes_de_bines                     <- strsplit2(names(V(gg_bines)), ":")      
       cantidad_genes_de_interes          <- c(cantidad_genes_de_interes, length(intersect(genes_de_bines[, 1], genes_de_interes_marcelo)))
       cantidad_bines_de_genes_de_interes <- c(cantidad_bines_de_genes_de_interes, sum(genes_de_bines[, 1] %in% genes_de_interes_marcelo))
-      enlaces                            <- c(enlaces, ecount(g_bines))
-      vertices                           <- c(vertices, vcount(g_bines))
+      enlaces                            <- c(enlaces, ecount(gg_bines))
+      vertices                           <- c(vertices, vcount(gg_bines))
       if(input$correlacion_minima == correlacion_minima){
         rv$g_bines <- g_bines
       }      
@@ -163,7 +174,7 @@ server <- function(input, output) {
     y <- cantidad_bines_de_genes_de_interes[correlaciones == input$correlacion_minima]    
     text(x=1, y=round(max(cantidad_bines_de_genes_de_interes)*0.85), labels=paste0("(", input$correlacion_minima, ", ", y, ")"), cex=1.5, pos=2)
     
-    print(paste(vcount(rv$g_bines), ecount(rv$g_bines)))
+    #print(paste(vcount(rv$g_bines), ecount(rv$g_bines)))
   })
 
   #Guarda los perfiles

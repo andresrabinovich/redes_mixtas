@@ -14,14 +14,8 @@ setwd("/home/arabinov/doctorado/programacion/redes_mixtas/")
 #Levanta las cuentas 
 (load("pipeline_archivos/cuentas.Rdata"))
 
-#Cargamos la lista de reguladores generada a partir de varios repositorios de datos.
-(load("pipeline_archivos/reguladores.Rdata"))
-
 #Elegimos las condiciones para la que vamos a generar la red
 (load("pipeline_archivos/1_seleccion_de_condiciones.Rdata"))
-
-#Nos quedamos con los reguladores de expresión génica
-reguladores_de_expresion <- union(union(poi[["TF"]],poi[["TCF"]]),reguladores[reguladores[,"tipo_de_regulador"]=="TF","gene_id"])
 
 #Solo queremos las cuentas de la temperatura indicada
 iTemp <- grep(paste0("at_",temperatura,"_"),colnames(cuentas_genes))
@@ -33,11 +27,6 @@ iTemp <- c(iTemp, grep(paste0("at_",temperatura_referencia,"_"),colnames(cuentas
 i1    <- apply(cuentas_genes[,iTemp],1,function(x){mean(x) > 10})
 i22   <- apply(cuentas_genes[,iTemp]/cuentas_genes[,"effective_length"],1,function(x){mean(x) > 0.05})
 ipass <- i1 & i22
-
-genes_de_interes <- unique(c(unlist(poi), reguladores$gene_id))
-
-#AGREGADO POR AR: Reduce la red únicamente a los genes de interes (reguladores))
-ipass <- names(ipass) %in% genes_de_interes
 
 #Filtramos las cuentas
 cuentas_genes <- cuentas_genes[ipass, c(1:9, iTemp)]
@@ -96,12 +85,13 @@ for(i in 1:(0.5*ncol(fit$coef))){
   cat("===============================================\nEvaluando contrastes",
       paste(paste0(contrastes[1:12], collapse = ""), paste0(contrastes[13:24], collapse = ""), sep="|")
       ,"\n")
-  
   ds                         <- glmLRT(fit, contrast = contrastes)
   genname                    <- rownames(ds$genes)
   lfchange_genes[genname, i] <- ds$table$logFC
   pvalues_genes[genname, i]  <- ds$table$PValue
+  
 }
+
 lfchange_genes <- lfchange_genes[!apply(lfchange_genes, 1, function(x){any(is.na(x))}), ]
 pvalues_genes  <- pvalues_genes[!apply(pvalues_genes, 1, function(x){any(is.na(x))}), ]
 
@@ -128,7 +118,7 @@ rownames(phenotype) <- paste0("at_", paste(rep(c(temperatura), each=24),
 genes_crudos   <- cuentas_genes[, grep(paste0("at_", temperatura), colnames(cuentas_genes))]
 
 #Fiteamos las cuentas de los genes por condición para temperatura
-design <- model.matrix(~condition+0, data=phenotype)
+design <- model.matrix(~condition + 0, data=phenotype)
 
 #Arma el objeto DGEList con las cuentas de los bines y de los genes y las condiciones
 y_genes <- DGEList(counts=genes_crudos, group = phenotype$condition, genes = genes_crudos[,1:8])
@@ -143,6 +133,23 @@ y_genes <- estimateDisp(y_genes, design)
 #Ajustamos los genes y usamos los coeficientes del ajuste como perfiles
 fit_genes <- glmFit(y_genes, design)
 
+#Pedimos cambios temporales en los perfiles
+pvalues_tiempo           <- matrix(0, ncol=11, nrow=nrow(fit_genes$coefficients))
+rownames(pvalues_tiempo) <- rownames(fit_genes$coefficients)
+lfchange_tiempo          <- pvalues_tiempo
+for(i in 2:12){
+  ds                     <- glmLRT(fit_genes, coef = i)
+  pvalues_tiempo[, i-1]  <- ds$table$PValue
+  lfchange_tiempo[, i-1] <- ds$table$logFC
+}
+
+lfchange_tiempo <- lfchange_tiempo[!apply(lfchange_tiempo, 1, function(x){any(is.na(x))}), ]
+pvalues_tiempo  <- pvalues_tiempo[!apply(pvalues_tiempo, 1, function(x){any(is.na(x))}), ]
+
+#ajusto TODOS los pv 
+qvalues_tiempo           <- matrix(p.adjust(pvalues_tiempo,"fdr"), ncol=ncol(pvalues_tiempo), byrow=FALSE)        
+rownames(qvalues_tiempo) <- rownames(pvalues_tiempo)
+
 #Guarda las cuentas de los genes y los cambios (log fold change) entre condiciones
 perfiles_genes <- fit_genes$coefficients
-save(lfchange_genes, qvalues_genes, perfiles_genes, cuentas_genes, reguladores_de_expresion, file="pipeline_archivos/2_genes_prefiltrados.Rdata")
+save(lfchange_genes, qvalues_genes, lfchange_tiempo, qvalues_tiempo, perfiles_genes, cuentas_genes, file="pipeline_archivos/2_genes_prefiltrados.Rdata")

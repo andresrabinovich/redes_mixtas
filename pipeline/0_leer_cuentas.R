@@ -23,12 +23,15 @@ print("Levantando anotaciones")
 features    <- binGenome(txdb)
 
 #Inicializamos los data.frame que van a contener las cuentas
-cuentas_genes <- cuentas_bines <- NULL 
+cuentas_genes    <- cuentas_bines <- NULL 
+
 
 #Cargamos los bam, 12 puntos temporales, dos réplicas, cuatro temperaturas y generamos un archivo de cuentas por temp.
 puntos_temporales <- 1:12
 replicas          <- c("A", "B") 
 temperaturas      <- c("22", "12", "17", "27")
+cuentas_junturas  <- setNames(vector("list", length(temperaturas)), temperaturas)
+
 print("Cargando los bam por temperatura")
 for(temperatura in temperaturas){
   print(paste("Procesando archivo de", temperatura, "grados"))
@@ -55,17 +58,19 @@ for(temperatura in temperaturas){
 
   #Armamos los data.frame de cuentas para los genes y para los bines  
   if(is.null(cuentas_genes) | is.null(cuentas_bines)){
-    cuentas_genes <- countsg(counts)
-    cuentas_bines <- countsb(counts)
+    cuentas_genes    <- countsg(counts)
+    cuentas_bines    <- countsb(counts)
+
   }else{
-    cuentas_genes <- cbind(cuentas_genes, ASpli:::.extractCountColumns(countsg(counts), targets))
-    cuentas_bines <- cbind(cuentas_bines, ASpli:::.extractCountColumns(countsb(counts), targets))
+    cuentas_genes    <- cbind(cuentas_genes, ASpli:::.extractCountColumns(countsg(counts), targets))
+    cuentas_bines    <- cbind(cuentas_bines, ASpli:::.extractCountColumns(countsb(counts), targets))
   }  
+  cuentas_junturas[[temperatura]] <- countsj(counts)
 
 }
 
 #Guardamos la lista de cuentas en un Rdata
-save(cuentas_genes, cuentas_bines, file = paste0(wd, "/cuentas/cuentas.Rdata"))
+save(cuentas_genes, cuentas_bines, cuentas_junturas, file = paste0(wd, "/cuentas/cuentas.Rdata"))
 
 #Limpiamos todo
 rm(list=c("bam", "counts"))

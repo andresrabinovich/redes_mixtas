@@ -1,18 +1,8 @@
-#!/usr/bin/env Rscript
-#args = commandArgs(trailingOnly=TRUE)
-#if (length(args)!=2) stop("Se deben pasar dos argumentos.", call.=FALSE)
-
-#Elijo el directorio de trabajo
-#setwd("~/doctorado/programacion/rna_seq/viejo/")
-
-#Cargo los datos
-#(load("glasso_ariel.Rdata"))
-
 ##############################################################################################
 #ANALISIS DE REDES MIXTAS EGO
 #Autor: Andrés Rabinovich
 #Creación: 08/06/2018
-#Última modificación: 11/06/2018 (por Andrés Rabinovich)
+#Última modificación: 13/10/2018 (por Andrés Rabinovich)
 ##############################################################################################
 
 #Librerías que necesita
@@ -21,7 +11,8 @@ library(igraph)
 library(glasso)
 library(reshape2)
 library(plyr)
-setwd("/home/arabinov/doctorado/programacion/redes_mixtas/")
+library(VennDiagram)
+setwd("~/doctorado/programacion/redes_mixtas/")
 
 #Funciones varias para grafos
 source("pipeline/funciones_grafos.R")
@@ -53,9 +44,6 @@ sd   <- apply(perfiles_bines, 1, sd)
 m    <- apply(perfiles_bines, 1, mean)
 zb   <- (perfiles_bines - m)/sd
 ccov <- cov(t(rbind(z, zb)))
-hist(cov(t(z)), main="Cov Genes")
-hist(cov(t(zb)), main="Cov Bines")
-#ccov <- cov(t(zb))
 
 penalizaciones <- matrix(ncol=ncol(ccov), nrow=nrow(ccov), 1)
 
@@ -226,11 +214,12 @@ for(i in 1:length(g_glasso)){
 }
 plot(kmax, xlab="1/lambda", ylab="k")
 points(kmin, col="red")
-abline(v=which.max(kmin != 0), col="green")
-abline(v=840, col="green")
+#abline(v=which.max(kmin != 0), col="green")
+abline(v=830, col="green")
 abline(h=max(kmax)/2, col="green")
 
 matplot(mm, type="b", pch=".")
+abline(h=0.5, col="blue")
 plot(seq(0.1, 1, length.out = length(g_glasso)), interseccion_a, xlab = "lambda", ylab = "% expresión en glasso")
 plot(seq(0.1, 1, length.out = length(g_glasso)), interseccion_b)
 plot(interseccion_a, interseccion_b, xlab="Expressión", ylab="Glasso")

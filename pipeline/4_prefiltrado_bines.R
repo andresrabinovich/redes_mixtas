@@ -159,7 +159,7 @@ bines_crudos   <- cuentas_bines[, grep(paste0("at_", temperatura), colnames(cuen
 #El diseño experimental es cada condición contra la referencia, que elegimos por defecto sea el primer tiempo.
 #Entonces, para decidir si un bin se expresó diferencialmente, se compara su expresión en cada tiempo contra la 
 #del tiempo T1
-design <- model.matrix(~condition+0, data=phenotype)  #referencia: T1
+design <- model.matrix(~condition+0, data=phenotype)  #referencia: T1: ~condition; referencia: contra el gen ~condition+0
 
 #Arma el objeto DGEList con las cuentas de los bines y de los genes y las condiciones
 y_genes <- DGEList(counts=genes_crudos, group = phenotype$condition, genes = genes_crudos[,1:8])

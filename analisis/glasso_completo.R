@@ -19,6 +19,8 @@
 library(limma)
 library(igraph)
 library(glasso)
+library(reshape2)
+library(plyr)
 setwd("/home/arabinov/doctorado/programacion/redes_mixtas/")
 
 #Funciones varias para grafos
@@ -50,34 +52,46 @@ z    <- (perfiles_genes - m)/sd
 sd   <- apply(perfiles_bines, 1, sd)
 m    <- apply(perfiles_bines, 1, mean)
 zb   <- (perfiles_bines - m)/sd
-#ccov <- cov(t(rbind(z, zb)))
-#ccov <- cov(t(z))
+ccov <- cov(t(rbind(z, zb)))
+hist(cov(t(z)), main="Cov Genes")
+hist(cov(t(zb)), main="Cov Bines")
 #ccov <- cov(t(zb))
 
-penalizaciones[["gg"]] <- matrix(ncol=ncol(ccov[["gg"]] ), nrow=nrow(ccov[["gg"]]), 1)
+penalizaciones <- matrix(ncol=ncol(ccov), nrow=nrow(ccov), 1)
 
-inestabilidades <- g_glasso <- penalizaciones <- ccov <- setNames(vector("list", 3), c("gg", "bb", "gb"))
+#inestabilidades <- g_glasso <- penalizaciones <- ccov <- setNames(vector("list", 3), c("gg", "bb", "gb"))
 
-ccov[["gg"]]           <- cov(t(z))
-ccov[["bb"]]           <- cov(t(zb))
-ccov[["gb"]]           <- cov(t(rbind(z[proteinas_relacionadas_con_splicing, ], zb)))
+colnames(penalizaciones)                     <- colnames(ccov)
+rownames(penalizaciones)                     <- rownames(ccov)
+# penalizaciones[ft, rownames(perfiles_genes)] <- "gg"
+# penalizaciones[rownames(perfiles_genes), ft] <- "gg"
+# penalizaciones[rownames(perfiles_bines), rownames(perfiles_bines)] <- "bb"
+# penalizaciones[proteinas_relacionadas_con_splicing, rownames(perfiles_bines)] <- "gb"
+# penalizaciones[rownames(perfiles_bines), proteinas_relacionadas_con_splicing] <- "gb"
+enlaces <- ends(g_ego, E(g_ego))
+bines_conectados <- c()
+for(i in 1:ecount(g_ego)){
+  tipo <- grep(":", enlaces[i, ])
+  if(length(tipo) == 0){
+    tipo = "gg"
+  }else if(length(tipo) == 1){
+    tipo = "gb"
+    if(length(grep(":", enlaces[i, 1])) == 1){
+      bines_conectados <- c(bines_conectados, enlaces[i, 1])
+    }else{
+      bines_conectados <- c(bines_conectados, enlaces[i, 2])
+    }
+    
+  }else{
+    tipo = "bb"
+  }
+  penalizaciones[enlaces[i, 1], enlaces[i, 2]] <- tipo
+  penalizaciones[enlaces[i, 2], enlaces[i, 1]] <- tipo
+  
+}
+bines_conectados <- unique(bines_conectados)
 
-penalizaciones[["gg"]]                               <- matrix(ncol=ncol(ccov[["gg"]] ), nrow=nrow(ccov[["gg"]]), 1)
-colnames(penalizaciones[["gg"]])                     <- colnames(ccov[["gg"]])
-rownames(penalizaciones[["gg"]])                     <- rownames(ccov[["gg"]])
-penalizaciones[["gg"]][ft, rownames(perfiles_genes)] <- "gg"
-penalizaciones[["gg"]][rownames(perfiles_genes), ft] <- "gg"
 
-penalizaciones[["bb"]]                                                     <- matrix(ncol=ncol(ccov[["bb"]] ), nrow=nrow(ccov[["bb"]]), 1)
-colnames(penalizaciones[["bb"]])                                           <- colnames(ccov[["bb"]])
-rownames(penalizaciones[["bb"]])                                           <- rownames(ccov[["bb"]])
-penalizaciones[["bb"]][rownames(perfiles_bines), rownames(perfiles_bines)] <- "bb"
-
-penalizaciones[["gb"]]                                                                <- matrix(ncol=ncol(ccov[["gb"]] ), nrow=nrow(ccov[["gb"]]), 1)
-colnames(penalizaciones[["gb"]])                                                      <- colnames(ccov[["gb"]])
-rownames(penalizaciones[["gb"]])                                                      <- rownames(ccov[["gb"]])
-penalizaciones[["gb"]][proteinas_relacionadas_con_splicing, rownames(perfiles_bines)] <- "gb"
-penalizaciones[["gb"]][rownames(perfiles_bines), proteinas_relacionadas_con_splicing] <- "gb"
 
 stars <- function(ccov, penalizaciones, pasos = 1000, subsample_ratio = NULL, beta = 0.1, numero_de_repeticiones = 20){
   n <- nrow(ccov)  
@@ -147,6 +161,11 @@ stars <- function(ccov, penalizaciones, pasos = 1000, subsample_ratio = NULL, be
 #   }
 #   return(path)
 # }
+median_gb <- median(abs(ccov[penalizaciones == "gb"]))
+median_gg <- median(abs(ccov[penalizaciones == "gg"]))
+median_bb <- median(abs(ccov[penalizaciones == "bb"]))
+lambda_gg <- median_gg/median_gb
+lambda_bb <- median_bb/median_gb
 
 barrido_glasso <- function(ccov, penalizaciones, pasos = 1000, verbose = TRUE){
   rho                        <- matrix(ncol=ncol(ccov), nrow=nrow(ccov), 1)
@@ -158,61 +177,69 @@ barrido_glasso <- function(ccov, penalizaciones, pasos = 1000, verbose = TRUE){
     if(verbose == TRUE & i %% round(0.1*pasos) == 0){
       print(paste0("Barrido ", i, " de ", pasos))        
     }
-    rho[penalizaciones != "1"] <- penalizacion
+    #rho[penalizaciones != "1"] <- penalizacion
+    rho[penalizaciones == "gg"] <- lambda_gg*penalizacion
+    rho[penalizaciones == "bb"] <- lambda_bb*penalizacion
+    rho[penalizaciones == "gb"] <- penalizacion
     me        <- glasso(ccov, rho=rho, thr = 1e-4, start = start, w.init = me$w, wi.init = me$wi)
     path[[i]] <- ifelse(me$wi!=0 & row(me$wi)!=col(me$wi), 1, 0)
+    colnames(path[[i]]) <- rownames(path[[i]]) <- rownames(ccov)
     start     <- "warm"
     i = i + 1
   }
   return(path)
 }
-g_glasso <- setNames(vector("list", 3), c("gg", "bb", "gb"))
-for(tipo in c("gg", "gb", "bb")){
-  print(paste("Barriendo", tipo))
-  g_glasso[[tipo]] <- barrido_glasso(ccov[[tipo]], penalizaciones[[tipo]], pasos = 1000)
-  for(i in 1:1000){
-    colnames(g_glasso[[tipo]][[i]]) <- rownames(g_glasso[[tipo]][[i]]) <- rownames(ccov[[tipo]])
-  }
-} 
+g_glasso <- barrido_glasso(ccov, penalizaciones, pasos = 1000)
 
 #Glasso no es simétrica
-g_melteada <- melt(as.matrix(as_adj(as.undirected(g))))
+g_melteada <- melt(as.matrix(as_adj(as.undirected(g_ego))))
 g_melteada <- g_melteada[g_melteada$value != 0, 1:2]
-interseccion_a <- rep(0, length(g_glasso[["gg"]]))
-interseccion_b <- rep(0, length(g_glasso[["gg"]]))
-tamano_g_glasso <- rep(0, length(g_glasso[["gg"]]))
+interseccion_a <- rep(0, length(g_glasso))
+interseccion_b <- rep(0, length(g_glasso))
+tamano_g_glasso <- rep(0, length(g_glasso))
+kmax <- rep(0, length(g_glasso))
+kmin <- rep(0, length(g_glasso))
+
 #layout(matrix(1:9, ncol=3))
-for(i in 1:length(g_glasso[["gg"]])){
-  #tamano_g_glasso <- 0
-  for(tipo in c("gg", "gb", "bb")){
-    if(TRUE){#FALSE){
-      print(paste("Barriendo", tipo, "con lambda", i/length(g_glasso[["gg"]])))
-      glasso_melteada <- melt(g_glasso[[tipo]][[i]])
-      glasso_melteada <- glasso_melteada[glasso_melteada$value != 0, 1:2]
-      tamano_g_glasso[i] <- tamano_g_glasso[i] + nrow(glasso_melteada)
-      interseccion_a[i] <- interseccion_a[i] + nrow(match_df(g_melteada, glasso_melteada))
-    }
-  }
-  if(i %% 20 == 0){
-  #  grid.newpage();    
-  #  draw.pairwise.venn(nrow(g_melteada), tamano_g_glasso[i], interseccion_a[i], category = c("Expresión", "Glasso"), filename = NULL)
-    #grid.draw(venn.plot);
+mm <- matrix(ncol=3, nrow=length(g_glasso))
+gm<-table(unlist(apply(g_melteada, 1, function(s){return(length(grep(":", s)))})))
+for(i in 1:length(g_glasso)){
+  print(paste("Barriendo", tipo, "con lambda", i/length(g_glasso)))
+  glasso_melteada <- melt(g_glasso[[i]])
+  glasso_melteada <- glasso_melteada[glasso_melteada$value != 0, 1:2]
+  tamano_g_glasso[i] <- nrow(glasso_melteada)
+  interseccion_a[i]  <- nrow(match_df(g_melteada, glasso_melteada))
+  if(i %% round(0.01*length(g_glasso)) == 0){
+    grid.newpage();    
+    draw.pairwise.venn(nrow(g_melteada), tamano_g_glasso[i], interseccion_a[i], category = c(paste("Expresión", i), "Glasso"), filename = NULL, main="a")
   }
   interseccion_b[i] <- interseccion_a[i]/tamano_g_glasso[i]
   interseccion_a[i] <- interseccion_a[i]/nrow(g_melteada)
+  ggm<-table(unlist(apply(glasso_melteada, 1, function(s){return(length(grep(":", s)))})))
+  mm[i, 1] <- ggm["0"]/gm["0"]
+  mm[i, 2] <- ggm["1"]/gm["1"]
+  mm[i, 3] <- ggm["2"]/gm["2"]
+  k <- table(glasso_melteada[, 1])[bines_conectados]+table(glasso_melteada[, 2])[bines_conectados]
+  #k2 <- table(g_melteada[, 1])[bines_conectados]+table(g_melteada[, 2])[bines_conectados]
+  kmax[i] <- max(k)
+  kmin[i] <- sum(k == 0)
 }
-plot(seq(0.1, 1, length.out = length(g_glasso[["gg"]])), interseccion_a)
-plot(seq(0.1, 1, length.out = length(g_glasso[["gg"]])), interseccion_b)
+plot(kmax, xlab="1/lambda", ylab="k")
+points(kmin, col="red")
+abline(v=which.max(kmin != 0), col="green")
+abline(v=840, col="green")
+abline(h=max(kmax)/2, col="green")
+
+matplot(mm, type="b", pch=".")
+plot(seq(0.1, 1, length.out = length(g_glasso)), interseccion_a, xlab = "lambda", ylab = "% expresión en glasso")
+plot(seq(0.1, 1, length.out = length(g_glasso)), interseccion_b)
 plot(interseccion_a, interseccion_b, xlab="Expressión", ylab="Glasso")
 abline(v=interseccion_a[879], col="red")
-seq(0.1, 1, length.out = length(g_glasso[["gg"]]))[identify(interseccion_a, interseccion_b)]
+seq(0.1, 1, length.out = length(g_glasso))[identify(interseccion_a, interseccion_b)]
 plot3d(interseccion_b, interseccion_a, seq(0.1, 1, length.out = length(g_glasso[["gg"]])), xlab="Glasso", ylab="Expressión", zlab="lambda")
 
 0.890991
 
-df1 <- data.frame(G1=sample(1:100, 10), G2=sample(1:100, 10), 
-                  G3=sample(1:100, 10), G4=sample(1:100, 10))
-venn.plot.df1 <- venn.diagram(x = as.list(df1)
 
 g_glasso <- setNames(vector("list", 3), c("gg", "bb", "gb"))
 for(tipo in c("gg", "gb", "bb")){
@@ -230,9 +257,12 @@ for(tipo in c("gg", "gb", "bb")){
   #plot(setGraphPlotOptions(g_glasso[[tipo]], nombres = T))
 }
 
+
 g_glasso <- componente_gigante(Reduce(union, g_glasso))
 g_glasso 
 intersection(g_glasso, g_ego)
+
+g_glasso <- graph_from_adjacency_matrix(g_glasso2[[830]],mode = "undirected")
 layout_g                 <- layout_nicely(g_glasso)
 rownames(layout_g)       <- names(V(g_glasso))
 layout_g[intersect(rownames(layout_g), names(V(g_genes))), 1] <- 10*normalizar(layout_g[intersect(rownames(layout_g), names(V(g_genes))), 1])
@@ -412,5 +442,6 @@ legend(-1.4,-1.4, legend = c("SRP", "Otras proteínas", "Bines"), col = c(rgb(0.
 # 
 # 
 # intersection(g_ego, g_glasso)
+
 
 

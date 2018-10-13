@@ -62,8 +62,11 @@ l_enlaces_interred <- setNames(lapply(unique(enlaces_interred[, 1]), function(x)
 #Secuencias de los modulados
 l_secuencias <- setNames(lapply(unique(enlaces_interred[, 2]), function(n){
   a          <- datos_bines[n, c("seqnames", "start", "end", "strand")]
-  s          <- subseq(fasta[a$seqnames[1]], start=a$start[1], end=a$end[1])
-  if(a$strand == "-") s <- reverseComplement(s)
+  ss          <- subseq(fasta[a$seqnames[1]], start=(a$start[1]-50), end=(a$start[1]+50))
+  se          <- subseq(fasta[a$seqnames[1]], start=(a$end[1]-50), end=(a$end[1]+50))
+  if(a$strand == "-"){
+    ss <- reverseComplement(ss)
+    se <- reverseComplement(se)
   return(as.character(s))
 }), unique(enlaces_interred[, 2]))
 

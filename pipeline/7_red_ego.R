@@ -21,7 +21,7 @@ source("pipeline/funciones_grafos.R")
 (load("pipeline_archivos/6_red_mixta.Rdata"))
 
 #Levantamos los genes relacionados con splicing en el transcriptoma
-proteinas_relacionadas_con_splicing <- unique(c(poi$SP, reguladores$gene_id[reguladores$tipo_de_regulador=="RBP" | reguladores$tipo_de_regulador=="NO CLASIFICADOS"]))
+proteinas_relacionadas_con_splicing <- unique(c(poi$SP, reguladores$gene_id[reguladores$tipo_de_regulador=="RBP" | reguladores$tipo_de_regulador=="NO CLASIFICADOS"], reguladores_de_splicing_extra))
 
 #Levantamos los simbolos de los genes
 at_simbolos        <- at_to_symbol <- read.table("pipeline_archivos/at_to_symbol_map", sep = "\t", header = F, stringsAsFactors = F)

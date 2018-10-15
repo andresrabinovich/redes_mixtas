@@ -32,7 +32,7 @@ at_simbolos        <- at_to_symbol$V2
 names(at_simbolos) <- at_to_symbol$V1
 
 #Levantamos los genes relacionados con splicing en el transcriptoma
-proteinas_relacionadas_con_splicing <- unique(c(poi$SP, reguladores$gene_id[reguladores$tipo_de_regulador=="RBP" | reguladores$tipo_de_regulador=="NO CLASIFICADOS"]))
+proteinas_relacionadas_con_splicing <- unique(c(poi$SP, reguladores$gene_id[reguladores$tipo_de_regulador %in% c("RBP", "NO CLASIFICADOS")], reguladores_de_splicing_extra))
 #proteinas_relacionadas_con_splicing <- c(proteinas_relacionadas_con_splicing, "AT4G31120")
 
 #Unimos las dos redes en un solo grafo pero por ahora no están vinculadas entre si
@@ -47,6 +47,7 @@ perfiles_bines  <- perfiles_bines[names(V(g_bines)), ]
 perfiles_genes  <- perfiles_genes[intersect(names(V(g_genes)), proteinas_relacionadas_con_splicing), ]
 #ccor           <- abs(cor(t(perfiles_bines), t(perfiles_genes)))
 ccor            <- abs(cor(t(perfiles_bines), t(perfiles_genes)))
+noabsccor       <- setNames(melt(cor(t(rbind(perfiles_bines, perfiles_genes)))), c('targets', 'sf', 'cor'))
 adyacencia      <- setNames(melt(ccor), c('targets', 'sf', 'pesos'))
 
 #interfaz de shiny

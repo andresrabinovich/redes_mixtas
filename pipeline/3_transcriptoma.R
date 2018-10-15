@@ -36,10 +36,16 @@ reguladores_de_expresion <- unique(c(poi[["TF"]],
                                      reguladores[reguladores[,"tipo_de_regulador"]=="TF","gene_id"])
 )
 
-genes_de_interes <- unique(c(unlist(poi), reguladores$gene_id))
+#genes_de_interes <- unique(c(unlist(poi), reguladores$gene_id))
+reguladores_de_splicing_extra <- c("AT5G27720", "AT5G48870", "AT1G04080", "AT5G06160", "AT5G16260", "AT1G30480", "AT1G80070", "AT1G20960", "AT1G06220", "AT4G03430", "AT5G08290", "AT2G41500", "AT1G60170", "AT4G24270", "AT5G16780", "AT1G09770", "AT1G04510", "AT2G33340", "AT4G15900", "AT3G18165", "AT5G28740", "AT1G77180", "AT3G18790", "AT5G41770", "AT1G07360", "AT1G10580", "AT3G13200", "AT2G38770", "AT1G32490", "AT2G35340", "AT1G33520", "AT3G20550", "AT4G31770", "AT3G04610", "AT4G26000", "AT4G00830", "AT4G03110", "AT4G16280", "AT2G13540", "AT5G44200", "AT2G27100", "AT3G54230", "AT1G30970", "AT5G67320", "AT5G26742", "AT1G05460", "AT2G21150", "AT5G22330", "AT1G02140", "AT2G45640", "AT2G19430", "AT5G13480")
+
+#genes_de_interes <- unique(c(unlist(poi), reguladores_de_expresion))
+genes_de_interes <- unique(c(unlist(poi),
+                           reguladores$gene_id[reguladores$tipo_de_regulador != "VARIOS NO TF"],
+                           reguladores_de_splicing_extra))
 
 #Agrego phytochromos a, b, c, d y e
-genes_de_interes <- c(genes_de_interes, "AT1G09570", "AT2G18790", "AT5G35840", "AT4G16250", "AT4G18130")
+#genes_de_interes <- c(genes_de_interes, "AT1G09570", "AT2G18790", "AT5G35840", "AT4G16250", "AT4G18130")
 
 #Genes con bines en cosplicing
 genes_con_bines_en_cosplicing <- intersect(strsplit2(names(V(g_bines)), ":")[, 1], genes_de_interes)

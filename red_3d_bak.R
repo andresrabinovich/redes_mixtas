@@ -9,8 +9,6 @@
 library(limma)
 library(igraph)
 library(rgl)
-library(dplyr)
-library(reshape2)
 setwd("~/doctorado/programacion/redes_mixtas/")
 
 #Funciones varias para grafos
@@ -18,22 +16,14 @@ source("pipeline/funciones_grafos.R")
 
 #Levantamos las redes
 (load("pipeline_archivos/reguladores.Rdata"))
-
-#Levantamos las redes de genes y bines y los perfiles de ambos para armar la red mixta
 (load("pipeline_archivos/2_genes_prefiltrados.Rdata"))
 (load("pipeline_archivos/3_transcriptoma.Rdata"))
-(load("pipeline_archivos/4_bines_prefiltrados.Rdata"))
 (load("pipeline_archivos/5_spliceoma.Rdata"))
 (load("pipeline_archivos/6_red_mixta.Rdata"))
 (load("pipeline_archivos/8_red_genes_regulados.Rdata"))
 
 #Levantamos los genes relacionados con splicing en el transcriptoma
-#proteinas_relacionadas_con_splicing <- unique(c(poi$SP, reguladores$gene_id[reguladores$tipo_de_regulador=="RBP" | reguladores$tipo_de_regulador=="NO CLASIFICADOS"], reguladores_de_splicing_extra))
-
-reguladores_de_splicing_extra <- c("AT5G27720", "AT5G48870", "AT1G04080", "AT5G06160", "AT5G16260", "AT1G30480", "AT1G80070", "AT1G20960", "AT1G06220", "AT4G03430", "AT5G08290", "AT2G41500", "AT1G60170", "AT4G24270", "AT5G16780", "AT1G09770", "AT1G04510", "AT2G33340", "AT4G15900", "AT3G18165", "AT5G28740", "AT1G77180", "AT3G18790", "AT5G41770", "AT1G07360", "AT1G10580", "AT3G13200", "AT2G38770", "AT1G32490", "AT2G35340", "AT1G33520", "AT3G20550", "AT4G31770", "AT3G04610", "AT4G26000", "AT4G00830", "AT4G03110", "AT4G16280", "AT2G13540", "AT5G44200", "AT2G27100", "AT3G54230", "AT1G30970", "AT5G67320", "AT5G26742", "AT1G05460", "AT2G21150", "AT5G22330", "AT1G02140", "AT2G45640", "AT2G19430", "AT5G13480")
-proteinas_relacionadas_con_splicing <- unique(c(poi$SP, poi$SUR,
-                             reguladores$gene_id[reguladores$tipo_de_regulador != "VARIOS NO TF"],
-                             reguladores_de_splicing_extra))
+proteinas_relacionadas_con_splicing <- unique(c(poi$SP, reguladores$gene_id[reguladores$tipo_de_regulador=="RBP" | reguladores$tipo_de_regulador=="NO CLASIFICADOS"]))
 
 #Levantamos los simbolos de los genes
 at_simbolos        <- at_to_symbol <- read.table("pipeline_archivos/at_to_symbol_map", sep = "\t", header = F, stringsAsFactors = F)
@@ -93,15 +83,15 @@ encontrar_curva <- function(x, y, n){
 
 #Graficamos la red por capas
 igraph_plot3d_por_capas <- function(g){
-  #g <- g_completo
-  l_objetos_geometricos <- list("bin"                                                        = icosahedron3d(),
+  g <- g_completo
+  l_objetos_geometricos <- list("proteina"                                                   = icosahedron3d(),
                                 "regulador_de_expresion"                                     = cube3d(),
                                 "proteina_relacionada_con_splicing"                          = tetrahedron3d(),
                                 "regulador_de_expresion_y_proteina_relacionada_con_splicing" = cuboctahedron3d()
-  )
+                                )
   
-  colores <- setNames(c("black", "red", "green", "blue"), c("bin", "regulador_de_expresion", "proteina_relacionada_con_splicing", "regulador_de_expresion_y_proteina_relacionada_con_splicing"))
-  
+  colores <- setNames(c("black", "red", "green", "blue"), c("proteina", "regulador_de_expresion", "proteina_relacionada_con_splicing", "regulador_de_expresion_y_proteina_relacionada_con_splicing"))
+
   capas <- unique(V(g)$capa)
   l_capas <- setNames(vector("list", length(capas)), capas)
   for(capa in capas){
@@ -114,15 +104,9 @@ igraph_plot3d_por_capas <- function(g){
   enlaces_inter_capas <- matrix(ncol=3, nrow=0)
   for(i in 1:(length(capas)-1)){
     for(j in (i+1):length(capas)){
-      enlaces_aux <- enlaces[, 1] %in% l_capas[[i]] & enlaces[, 2] %in% l_capas[[j]] | enlaces[, 2] %in% l_capas[[i]] & enlaces[, 1] %in% l_capas[[j]]
-      if(sum(enlaces_aux) > 0){
-        enlaces_inter_capas <- rbind(enlaces_inter_capas,
-                                     cbind(enlaces[enlaces_aux, ],
-                                           ifelse(E(g)$cor[enlaces_aux] > 0, "red", "blue")
-                                     )
-                                      #     rownames(colores_intercapa)[(colores_intercapa[, 1] == i & colores_intercapa[, 2] == j) | (colores_intercapa[, 1] == i & colores_intercapa[, 2] == j)])
-        )
-      }
+      enlaces_inter_capas <- rbind(enlaces_inter_capas,
+                                   cbind(enlaces[enlaces[, 1] %in% l_capas[[i]] & enlaces[, 2] %in% l_capas[[j]] |
+                                   enlaces[, 2] %in% l_capas[[i]] & enlaces[, 1] %in% l_capas[[j]], ], rownames(colores_intercapa)[(colores_intercapa[, 1] == i & colores_intercapa[, 2] == j) | (colores_intercapa[, 1] == i & colores_intercapa[, 2] == j)]))
       #                             enlaces[enlaces[, 1] %in% l_capas[[i]] & enlaces[, 2] %in% unlist(l_capas[-i]) |
       #                             enlaces[, 2] %in% l_capas[[i]] & enlaces[, 1] %in% unlist(l_capas[-i]), ])      
     }
@@ -198,8 +182,8 @@ igraph_plot3d_por_capas <- function(g){
   }
   for(n in 1:length(l_capas)){
     rgl.quads( x = rep(c(min(layout_total[layout_total[, "capa"] == n, "x"]), max(layout_total[layout_total[, "capa"] == n, "x"])), each = 2),
-               y = c(min(layout_total[, "y"]), max(layout_total[, "y"]), max(layout_total[, "y"]), min(layout_total[, "y"])), 
-               z = rep(ncapa[n], times=4), color="black", alpha=0.1)
+             y = c(min(layout_total[, "y"]), max(layout_total[, "y"]), max(layout_total[, "y"]), min(layout_total[, "y"])), 
+             z = rep(ncapa[n], times=4), color="black", alpha=0.1)
   }
   
   #while(interactive()){
@@ -238,10 +222,9 @@ igraph_plot3d_por_capas <- function(g){
 # g_completo <- g %u% as.undirected(g_regulacion_completa)
 
 #g_completo <- g
-#g_completo <- g_glasso
-g_completo <- delete.vertices(simplify(g), degree(g)==0)
-noabsccor       <- cor(t(perfiles_bines), t(perfiles_genes))
-V(g_completo)$tipo                                                                                                     <- "bin"
+g_completo <- g_glasso
+
+V(g_completo)$tipo                                                                                                     <- "proteina"
 V(g_completo)[names(V(g_completo)) %in% reguladores_de_expresion]$tipo                                                 <- "regulador_de_expresion"
 V(g_completo)[names(V(g_completo)) %in% proteinas_relacionadas_con_splicing]$tipo                                      <- "proteina_relacionada_con_splicing"
 V(g_completo)[names(V(g_completo)) %in% intersect(reguladores_de_expresion, proteinas_relacionadas_con_splicing)]$tipo <- "regulador_de_expresion_y_proteina_relacionada_con_splicing"
@@ -250,14 +233,6 @@ V(g_completo)[names(V(g_completo)) %in% names(V(g_bines))]$capa <- "bines"
 V(g_completo)[names(V(g_completo)) %in% setdiff(names(V(g_regulacion_completa)),c(names(V(g_genes)), names(V(g_bines))))]$capa <- "genes"  
 V(g_completo)[names(V(g_completo)) %in% proteinas_relacionadas_con_splicing]$capa <- "SRP"
 
-#Calculamos la correlación entre bines y proteinas relacionadas con splicing
-perfiles_bines  <- perfiles_bines[names(V(g_completo))[grep(":", names(V(g_completo)))], ]
-perfiles_genes  <- perfiles_genes[names(V(g_completo))[!1:vcount(g_completo) %in% grep(":", names(V(g_completo)))], ]
-noabsccor       <- setNames(melt(cor(t(rbind(perfiles_bines, perfiles_genes)))), c('targets', 'sf', 'cor'))
-enlaces         <- ends(g_completo, E(g_completo))
-colnames(enlaces) <- c("targets", "sf")
-enlaces <- inner_join(as.data.frame(enlaces), as.data.frame(noabsccor))
-E(g_completo)$cor <- enlaces$cor
 enlaces_inter_capas <- igraph_plot3d_por_capas(g_completo)
 
 # a <- (rbind(enlaces_inter_capas[enlaces_inter_capas[, 1] %in% names(V(g_completo))[V(g_completo)$capa == "genes"] & !enlaces_inter_capas[, 2] %in% names(V(g_completo))[V(g_completo)$capa == "genes"], c(1,3)],
